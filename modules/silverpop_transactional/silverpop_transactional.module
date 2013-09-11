@@ -697,6 +697,7 @@ function silverpop_log($event_type, $event_name, $recipient_email = NULL, $recip
     $timestamp = time();
   }
 
+  // @todo: #D7 db_insert.
   $field_data = array(
     'event_type' => $event_type,
     'event_name' => $event_name,
@@ -705,10 +706,7 @@ function silverpop_log($event_type, $event_name, $recipient_email = NULL, $recip
     'timestamp' => $timestamp,
     'data' => serialize($data),
   );
-  // @todo: confirm D7 operation/syntax.
-  db_insert('silverpop_log')
-    ->fields($field_data)
-    ->execute();
+  drupal_write_record('silverpop_log', $field_data);
 }
 
 /**

@@ -1,0 +1,341 @@
+<?php
+
+/**
+ * This module provides a means of viewing Silverpop report data in Drupal.
+ */
+
+/**
+ * Implements hook_permission.
+ */
+function silverpop_reporting_permission() {
+  return array(
+    'view silverpop report data' => array(
+      'title' => t('View Silverpop report data'),
+      'description' => t('Access pages in Drupal that display data from '
+      . 'Silverpop\'s mailing reports'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_cron
+ */
+//function silverpop_reporting_cron() {
+  // Fetch the latest report data from SP for any report-enabled mailings.
+  // @todo: provide admin control over which mailings/templates' data to fetch
+  //  and how to display that data? (NRD 2013-09-11).
+//}
+
+/**
+ * Implements hook_form_FORM_ID_alter.
+ *
+ * Add reporting-specific options to the Silverpop configuration form.
+ */
+//function silverpop_reporting_form_silverpop_admin_settings_form_alter(&$form, &$form_state) {
+//
+//}
+
+/**
+ * For all transactional emails in our local consciousness, order a Silverpop
+ *  data export for the corresponding autoresponder mailing, retrieve the
+ *  exported data, parse it
+ *  and store it in our own table for use in local reporting dashboards, etc.isset
+ * @return array
+ */
+// @todo: split this between this and the silverpop_transactional module. Make
+//  this a generic routine to fetch report data for all mailings or a given list
+//  of mailings (NRD 2013-09-11).
+//function silverpop_fetch_transactional_data(&$form = NULL, &$form_state = NULL) {
+//
+//  $errors = FALSE;
+//
+//  $sp = new silverpopAPI();
+//  $map = $sp->drupalSPMailMapping();
+//  $default_trans_mailing_id = variable_get('silverpop_transactional_default_template_id', NULL);
+//  $sp_uid_field_name = variable_get('silverpop_primary_key_name', 'DRUPAL_USER_ID');
+//  if (!empty($form_state['values']['export_start_date'])) {
+//    $export_start_date = strtotime($form_state['values']['export_start_date']);
+//  }
+//  if (empty($export_start_date)) {
+//    $one_day_ago = strtotime('-1 day');
+//    $export_start_date = variable_get('silverpop_last_transactional_fetch_time', $one_day_ago);
+//  }
+//  if (!empty($form_state['values']['export_end_date'])) {
+//    $export_end_date = strtotime($form_state['values']['export_end_date']);
+//  }
+//  if (empty($export_end_date)) {
+//    $export_end_date = time();
+//  }
+//
+//  $data = array(
+//    'ALL_EVENT_TYPES' => 'true',
+//    'EVENT_DATE_START' => date('m/d/Y H:i:s', $export_start_date),
+//    'EVENT_DATE_END' => date('m/d/Y H:i:s', $export_end_date),
+//    'MOVE_TO_FTP' => 'true',
+//    'RETURN_MAILING_NAME' => 'true',
+//    'COLUMNS' => array(
+//      $sp_uid_field_name,
+//    ),
+//  );
+//
+//  $created_files = array();
+//
+//  // Start with a list of all drupal mailings that have been mapped to SP
+//  //  autoresponders.
+//  $all_mailings = $map['drupal'];
+//  // Add an entry for all unmapped mailings (those that used the default
+//  //  autoresponder).
+//  $all_mailings['unclassified'] = $default_trans_mailing_id;
+//
+//  foreach ($all_mailings as $drupal_mail_key => $sp_mailing_id) {
+//    if (!empty($sp_mailing_id)) {
+//      $data['MAILING_ID'] = $sp_mailing_id;
+//      $data['EXPORT_FILE_NAME'] = $drupal_mail_key;
+//      $result = $sp->rawRecipientDataExport($data);
+//      if (is_array($result) && $result[0] == TRUE) {
+//        // @todo: more succinct/elegant parsing.
+//        $jobIDs = $result[1]->getElementsByTagName('JOB_ID');
+//        $job_id = $jobIDs->item($jobIDs->length - 1)->nodeValue;
+//        $filePaths = $result[1]->getElementsByTagName('FILE_PATH');
+//        $file_path = $filePaths->item($filePaths->length - 1)->nodeValue;
+//        $created_files[] = $file_path;
+//        drupal_set_message('Exported data for drupal transactional mail "'
+//          .   $drupal_mail_key . '" (Silverpop mailing ID '
+//          .   $sp_mailing_id . '). Data job ID: ' . $job_id . '. '
+//          .   'Exported file: ' . $file_path);
+//      }
+//      else {
+//        drupal_set_message('Failed to export data for drupal transactional mail "'
+//                  .   $drupal_mail_key . '" (Silverpop mailing ID '
+//                  .   $sp_mailing_id . ')', 'error');
+//        $errors = TRUE;
+//      }
+//    }
+//  }
+//
+//  // @todo: capture JOB_ID and FILE_PATH from $result, and use them in our file
+//  //  retrieval (after background data job completes)? It may be just as good
+//  //  to scour the ftp directory for all usable files each time this function
+//  //  is invoked (and deduce the Drupal mail key from the filename)
+//  //  (NRD 2013-07-08).
+//
+//  $ftp_host = variable_get('silverpop_ftp_host', NULL);
+//  $ftp_username = variable_get('silverpop_ftp_username', NULL);
+//  $ftp_password = variable_get('silverpop_ftp_password', NULL);
+//
+//  $conn_id = ftp_connect($ftp_host);
+//
+//  // Login with username and password
+//  $login_result = ftp_login($conn_id, $ftp_username, $ftp_password);
+//
+//  if (!$login_result) {
+//    drupal_set_message(t('Could not log-in to FTP server with provided '
+//      . 'credentials.'), 'error');
+//    return FALSE;
+//  }
+//
+//  // Force our connection to use passive mode (i.e. where transactions must be
+//  //  client-initiated). This can help if the client is behind a firewall
+//  //  (may only be necessary in local dev environment,
+//  //  but should cause no side effects in other environments).
+////  ftp_pasv($conn_id, TRUE);
+//
+//  // Get a list of files in the "download" directory.
+//  $directory_contents = ftp_nlist($conn_id, 'download');
+//
+//  $local_zip_files = array();
+//  $local_csv_files = array();
+//
+//  foreach ($directory_contents as $remote_file) {
+//    $filename = preg_replace('/^download\//', '', $remote_file);
+//    $local_file_uri = file_directory_temp() . '/' . $filename;
+//    $download_attempt = ftp_get($conn_id, $local_file_uri, $remote_file, FTP_BINARY);
+//    if (!$download_attempt) {
+//      drupal_set_message(t('Could not download ' . $remote_file), 'error');
+//      $errors = TRUE;
+//    }
+//    else {
+//      $local_zip_files[$remote_file] = $local_file_uri;
+//    }
+//  }
+//  foreach ($local_zip_files as $remote_zip_file => $local_zip_file) {
+//    $zip = zip_open($local_zip_file);
+//    if(!is_resource($zip)) {
+//      $error_code = zipFileErrMsg($zip);
+//      drupal_set_message(t('Unable to open file: ') . $local_zip_file
+//        . ' (error: ' . $error_code . ')', 'error');
+//      $errors = TRUE;
+//      continue;
+//    }
+//
+//    while ($zip_entry = zip_read($zip)) {
+//      $zname = zip_entry_name($zip_entry);
+//
+//      if (!zip_entry_open($zip, $zip_entry, 'r')) {
+//        drupal_set_message(t('Unable to proccess file: ') . $zname, 'error');
+//        $errors = TRUE;
+//        continue;
+//      }
+//
+//      $zip_fs = zip_entry_filesize($zip_entry);
+//      if (empty($zip_fs)) {
+//        continue;
+//      }
+//
+//      $zz = zip_entry_read($zip_entry, $zip_fs);
+//
+//      $csv_uri = file_directory_temp() . '/' . $zname;
+//
+//      $z = fopen($csv_uri, 'w');
+//      fwrite($z, $zz);
+//      fclose($z);
+//      zip_entry_close($zip_entry);
+//
+//      $local_csv_files[$remote_zip_file] = $csv_uri;
+//    }
+//    if (is_int($zip_entry)) {
+//      $error_code = zipFileErrMsg($zip);
+//      drupal_set_message(t('Unable to read file: ') . $local_zip_file
+//      . ' (error: ' . $error_code . ')', 'error');
+//      $errors = TRUE;
+//    }
+//
+//    zip_close($zip);
+//
+//    // Delete the local zip file (optional).
+//    file_delete($local_zip_file);
+//  }
+//
+//  foreach ($local_csv_files as $remote_zip_file_name => $csv_file) {
+//    // The string at the beginning of the filename is the name of the Drupal
+//    //  mail key for the given mailing.
+//    // @todo: use a more straightforward/reliable approach (e.g. store a list of
+//    //  specific file names from our exports, and reference those directly)?
+//    $drupal_mail_key_match = preg_match('/^(.*\/)?([^\/\s]+)[^\/]+$/', $csv_file, $matches);
+//    // Fall back to the filename if necessary (shouldn't happen).
+//    $drupal_mail_key = $drupal_mail_key_match ? $matches[2] : $csv_file;
+//    $sp_uid_field_name = variable_get('silverpop_primary_key_name', 'DRUPAL_USER_ID');
+//    ini_set('auto_detect_line_endings', TRUE);
+//    $handle = fopen($csv_file, 'r');
+//    $headers = fgetcsv($handle);
+////    $db_rows = array();
+//    if ($headers) {
+//      while (($row = fgetcsv($handle)) !== FALSE) {
+//        $assoc_row = array_combine($headers, $row);
+//        $transformed_row = array(
+//          'sp_mailing_name' => $assoc_row['Mailing Name'],
+//          'drupal_mail_key' => $drupal_mail_key,
+//          'sp_mailing_id' => $assoc_row['Mailing Id'],
+//          'recipient_email' => $assoc_row['Email'],
+//          'recipient_uid' => $assoc_row[$sp_uid_field_name],
+//          'event_type' => $assoc_row['Event Type'],
+//          'event_timestamp' => strtotime($assoc_row['Event Timestamp']),
+//          'event_type' => $assoc_row['Event Type'],
+//          'sp_recipient_id' => $assoc_row['Recipient Id'],
+//          'recipient_type' => $assoc_row['Recipient Type'],
+//          'sp_report_id' => $assoc_row['Report Id'],
+//          'content_id' => $assoc_row['Content Id'],
+//          'click_name' => $assoc_row['Click Name'],
+//          'click_url' => $assoc_row['URL'],
+//        );
+//        // @todo: #D7 insert en masse?
+////        $db_rows[] = $transformed_row;
+//        $result = drupal_write_record('silverpop_report_data', $transformed_row);
+//      }
+////      $result = drupal_write_record('silverpop_report_data', $db_rows);
+//    }
+////    file_delete($csv_file);
+//    ftp_delete($conn_id, $remote_zip_file_name);
+//  }
+//
+//  ftp_close($conn_id);
+//
+//  if ($errors) {
+//    return FALSE;
+//  }
+//  else {
+//    return TRUE;
+//  }
+//}
+
+/**
+ * Implements hook_views_api.
+ * @return array
+ */
+function silverpop_reporting_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'silverpop_reporting') . '/views',
+  );
+}
+
+/**
+ * Implements hook_block.
+ * @todo: more elegant dashboard assembly, and/or move this to silverpop_views
+ *  or silverpop_reports module.
+ * @todo: D7, etc.
+ */
+//function silverpop_block($op='list', $delta = 0, $edit = array()) {
+//  switch ($op) {
+//    case 'list':
+//      $blocks = array();
+//      $blocks['sp_trans_report_data_control'] = array(
+//        'info' => t('Silverpop Transactional Report Data Control'),
+//        'visibility' => 1,
+//        'pages' => 'admin/reports/silverpop-transactional',
+//      );
+//      return $blocks;
+//    case 'view':
+//      switch ($delta) {
+//        case 'sp_trans_report_data_control':
+//          $block_content_string = 'You can use the button below to request a '
+//            . 'new '
+//            . 'data export from your Silverpop database. When the Silverpop '
+//            . 'data job is finished, the exported data will be available for '
+//            . 'retrieval. Clicking this button will initiate a new set of '
+//            . 'exports and then retrieve any available data and import it '
+//            . 'into Drupal. Because data '
+//            . 'jobs can take some time to complete, you may need to perform '
+//            . 'this export/fetch twice to get the latest possible data.';
+//          $block_contents = '<p>' . t($block_content_string) . '</p>'
+//            . drupal_get_form('silverpop_reporting_dashboard_form');
+//          $block = array(
+//            'subject' => t('Retrieve more data from Silverpop'),
+//            'content' => $block_contents,
+//          );
+//          break;
+//      }
+//      return $block;
+//  }
+//}
+
+/**
+ * Defines a form for use on reports dashboard page.
+ * @return array
+ */
+//function silverpop_reporting_dashboard_form() {
+//  $form = array();
+//  $form['export_start_date'] = array(
+//    '#type' => 'textfield',
+//    '#title' => t('Export Start Date'),
+//    '#description' => t('The beginning of the date range whose data you want '
+//      . 'to fetch. Defaults to one day ago.'),
+//    '#size' => 40,
+//    '#maxlength' => 255,
+//  );
+//  $form['export_end_date'] = array(
+//    '#type' => 'textfield',
+//    '#title' => t('Export End Date'),
+//    '#description' => t('The end of the date range whose data you want to '
+//      . 'fetch. Defaults to the present time.'),
+//    '#size' => 40,
+//    '#maxlength' => 255,
+//  );
+//  $form['export_transactional_data'] = array(
+//    '#type' => 'button',
+//    '#value' => t('Export/Fetch Data'),
+//    '#executes_submit_callback' => TRUE,
+//    '#submit' => array('silverpop_fetch_transactional_data'),
+//  );
+//  return $form;
+//}

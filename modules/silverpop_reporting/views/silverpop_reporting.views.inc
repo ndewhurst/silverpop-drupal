@@ -17,7 +17,7 @@
 /**
  * Implementation of hook_views_data().
  */
-function silverpop_views_data() {
+function silverpop_reporting_views_data() {
   $data = array();
   $data['silverpop_report_data']['table']['group'] = t('Silverpop');
 
@@ -155,10 +155,10 @@ function silverpop_views_data() {
  * Implementation of hook_views_handlers() to register all of the basic handlers
  * views uses.
  */
-function silverpop_views_handlers() {
+function silverpop_reporting_views_handlers() {
   return array(
     'info' => array(
-      'path' => drupal_get_path('module', 'silverpop') . '/views',
+      'path' => drupal_get_path('module', 'silverpop_reporting') . '/views',
     ),
     'handlers' => array(
       // The name of my handler
