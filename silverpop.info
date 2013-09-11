@@ -1,0 +1,6 @@
+version = 6.x-1.8
+name = Silverpop
+description = Provides a Drupal interface for the Silverpop XML API
+core = 6.x
+php = 5.2
+package = Services

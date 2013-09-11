@@ -1,0 +1,1019 @@
+<?php
+
+/**
+ * This module exposes the Silverpop Engage XML API to other Drupal modules.
+ * It provides a number of popular API methods via the silverpopAPI class.
+ * In order to utilize it with your own Silverpop account, you'll need to
+ * configure a few settings at admin/settings/silverpop.
+ * It also provides a config-only option to use Silverpop for all system emails.
+ * See silverpopAPI.inc for more info on the API methods supported.
+ * See silverpopXML.inc for more info on the core data connection to Silverpop.
+ */
+
+module_load_include('inc', 'silverpop', 'silverpopAPI');
+module_load_include('inc', 'silverpop', 'simple_html_dom');
+
+/**
+ * Implementation of hook_menu().
+ */
+function silverpop_menu() {
+
+  $items = array();
+  $items['admin/settings/silverpop'] = array(
+    'title' => 'Silverpop',
+    'description' => t('Silverpop API Settings'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('silverpop_admin_settings_form'),
+    'access arguments' => array('administer silverpop'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_perm().
+ */
+function silverpop_perm() {
+  return array('administer silverpop');
+}
+
+/**
+ * Implements hook_cron
+ */
+function silverpop_cron() {
+  // Fetch the latest report data from SP for transactional mailings, for use
+  //  in local reporting dashboards, etc.
+  // First, record the time of this data retrieval.
+  $request_time = time();
+  // Then try to fetch new data.
+  $success = silverpop_fetch_transactional_data();
+  // If the fetch process succeeded, record the time at which the fetch was
+  //  initiated.
+  if ($success) {
+    variable_set('silverpop_last_transactional_fetch_time', $request_time);
+  }
+}
+
+/**
+ * Silverpop account configuration.
+ * @return mixed
+ */
+function silverpop_admin_settings_form() {
+
+  $form['connection'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Account/Connection'),
+    '#description' => t('Fundamental details about your Silverpop account.'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['connection']['silverpop_endpoint'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Endpoint'),
+    '#description' => t('The URL of the Silverpop API endpoint to use. This '
+      . 'varies according to the Silverpop "pod" associated with your '
+      . 'account.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#required' => TRUE,
+    '#default_value' => variable_get('silverpop_endpoint', NULL),
+  );
+
+  $form['connection']['silverpop_userid'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Username'),
+    '#description' => t('Your Silverpop username.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_userid', NULL),
+  );
+
+  $form['connection']['silverpop_password'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Password'),
+    '#description' => t('Your Silverpop password.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_password', NULL),
+  );
+
+  $form['connection']['silverpop_oauth_client_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('OAuth Client ID'),
+    '#description' => t('The client ID generated when you added this '
+      . 'module as an application in your Silverpop org settings.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_oauth_client_id', NULL),
+  );
+
+  $form['connection']['silverpop_oauth_client_secret'] = array(
+    '#type' => 'textfield',
+    '#title' => t('OAuth Client Secret'),
+    '#description' => t('The client secret generated when you added this '
+    . 'module as an application in your Silverpop org settings.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_oauth_client_secret', NULL),
+  );
+
+  $form['connection']['silverpop_oauth_refresh_token'] = array(
+    '#type' => 'textfield',
+    '#title' => t('OAuth Refresh Token'),
+    '#description' => t('The "User Account Refresh Token" that Silverpop '
+      . 'provided when you granted a Silverpop user access to this '
+      . 'module\'s application in your Silverpop org settings. This token '
+      . 'should have been emailed to the notification email address of the '
+      . 'org admin who granted the module access.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_oauth_refresh_token', NULL),
+  );
+
+  $form['ftp'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('FTP Connection'),
+    '#description' => t('Access info for your Engage FTP repository'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['ftp']['silverpop_ftp_host'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Host'),
+    '#description' => t('e.g. transfer1.silverpop.com'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#required' => TRUE,
+    '#default_value' => variable_get('silverpop_ftp_host', NULL),
+  );
+
+  $form['ftp']['silverpop_ftp_username'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Username'),
+    '#description' => t('Your FTP username.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_ftp_username', NULL),
+  );
+
+  $form['ftp']['silverpop_ftp_password'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Password'),
+    '#description' => t('Your FTP password.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_ftp_password', NULL),
+  );
+
+  $form['account_details'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Account Configuration Details'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['account_details']['silverpop_default_listid'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Default List/Database ID'),
+    '#description' => t('The ID of the Silverpop database/list to use when '
+      . 'none is explicitly specified.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_default_listid', NULL),
+  );
+
+  $form['account_details']['silverpop_default_templateid'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Default Template ID'),
+    '#description' => t('The ID of the Silverpop mailing template to use when '
+      . 'none is explicitly specified.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_default_templateid', NULL),
+  );
+
+  $form['account_details']['silverpop_db_is_uid_keyed'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Database is Keyed by UID'),
+    '#description' => t('Select this option if your Silverpop database uses '
+      . 'a field based on the drupal user ID as its primary identifier, rather '
+      . 'than using the default "Email" field. Structuring your database in '
+      . 'this way can improve data integrity and streamline user actions such '
+      . 'as changing email addresses.'),
+    '#default_value' => variable_get('silverpop_db_is_uid_keyed', NULL),
+  );
+
+  $form['account_details']['silverpop_primary_key_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Unique Identifier Field Name'),
+    '#description' => t('The name of the field that is the primary unique '
+      . 'identifier in your Silverpop database (defaults to "DRUPAL_USER_ID"). '
+      . 'This is only required for databases that do not use "Email" as the '
+      . 'primary key.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_primary_key_name', 'DRUPAL_USER_ID'),
+  );
+
+  $form['analytics'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Analytics'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['analytics']['silverpop_domains_to_exclude_from_tracking'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Domains/Patterns to Exclude'),
+    '#description' => t('You can optionally specify that you do not want '
+      . 'Silverpop to modify links that match certain patterns. You can enter '
+      . 'multiple strings here, separated by commas. Any link that contains '
+      . 'any of these strings will neither have Silverpop tracking applied to '
+      . 'it nor be appended with the "append string" given below.'),
+    '#size' => 128,
+    '#maxlength' => 512,
+    '#default_value' => variable_get('silverpop_domains_to_exclude_from_tracking', NULL),
+  );
+
+  $form['analytics']['silverpop_dll_server'] = array(
+    '#type' => 'textfield',
+    '#title' => t('DLL Server'),
+    '#description' => t('The URL of the server to use for Engage Dynamic Link '
+      . 'Leader (DLL) URL encoding. The server varies according to the '
+      . 'Silverpop "pod" associated with your account.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_dll_server', NULL),
+  );
+
+  $form['analytics']['silverpop_url_append_string'] = array(
+    '#type' => 'textfield',
+    '#title' => t('URL Append String'),
+    '#description' => t('A string to append to all links within the content of '
+      . 'a mailing. This applies to links that are sent to Silverpop via the '
+      . 'API, and not to links that reside in templates composed in Silverpop. '
+      . 'This can be used, for example, to add Google Analytics tracking '
+      . 'parameters to links.'),
+    '#size' => 128,
+    '#maxlength' => 512,
+    '#default_value' => variable_get('silverpop_url_append_string', NULL),
+  );
+
+  $form['analytics']['silverpop_url_append_string_domains'] = array(
+    '#type' => 'textfield',
+    '#title' => t('URL Append String Domain(s)'),
+    '#description' => t('You can optionally specify that the URL append string '
+      . '(listed above) should only be appended to links that point to a given '
+      . 'domain. You can also specify multiple domains by separating each with '
+      . 'a comma.'),
+    '#size' => 128,
+    '#maxlength' => 512,
+    '#default_value' => variable_get('silverpop_url_append_string_domains', NULL),
+  );
+
+  $form['analytics']['silverpop_transactional_track_links'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Track Links in Transactional Emails'),
+    '#description' => t('Enable link tracking (as defined above) for links in '
+      . 'any transactional emails sent via Silverpop.'),
+    '#default_value' => variable_get('silverpop_transactional_track_links', TRUE),
+  );
+
+  $form['transactional'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Transactional Emails'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['transactional']['silverpop_replace_standard_mail'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Use Silverpop for system mailings'),
+    '#description' => t('Use Silverpop to send emails initiated by Drupal '
+      . 'actions (transactional emails), wherever possible, rather than using '
+      . 'the default mail mechanism.'),
+    '#default_value' => variable_get('silverpop_replace_standard_mail', FALSE),
+  );
+
+  $form['transactional']['mailing_id_mapping'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Drupal-Silverpop Mapping'),
+    '#description' => t('Use this section to associate Drupal transactional '
+      . 'emails with Silverpop autoresponders that you have created for them. '
+      . 'Creating a separate autoresponder for each transactional allows you '
+      . 'to view Silverpop statistics for each transactional email. The list '
+      . 'you see here will grow as new types of transactional emails are '
+      . 'created by various Drupal modules. For any transactional email not '
+      . 'associated with a Silveprop autoresponder, we will use the default '
+      . 'autoresponder indicated below.'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $sp = new silverpopAPI();
+  $mailing_map = $sp->drupalSPMailMapping();
+  $i = 0;
+  foreach ($mailing_map['drupal'] as $drupal_mail_key => $sp_mailing_id) {
+    $i++;
+    $form['transactional']['mailing_id_mapping']['mailing_id_mapping_' . $i . '_drupal'] = array(
+      '#prefix' => '<tr><td>',
+      '#type' => 'textfield',
+      '#title' => t('Drupal Mail Key'),
+      '#size' => 64,
+      '#maxlength' => 255,
+      '#default_value' => empty($drupal_mail_key) ? '' : $drupal_mail_key,
+      '#suffix' => '</td>',
+    );
+    $form['transactional']['mailing_id_mapping']['mailing_id_mapping_' . $i . '_sp'] = array(
+      '#prefix' => '<td>',
+      '#type' => 'textfield',
+      '#title' => t('Silverpop Autoresponder Mailing ID'),
+      '#size' => 64,
+      '#maxlength' => 255,
+      '#default_value' => empty($sp_mailing_id) ? '' : $sp_mailing_id,
+      '#suffix' => '</td></tr>',
+    );
+  }
+  // Wrap the collection of field pairs in table tags. This is quite awful.
+  if ($i > 0) {
+    $form['transactional']['mailing_id_mapping']['mailing_id_mapping_1_drupal']['#prefix'] = '<table><tr><td>';
+    $form['transactional']['mailing_id_mapping']['mailing_id_mapping_' . $i . '_sp']['#suffix'] = '<tr><td></table>';
+  }
+
+  $form['transactional']['mailing_id_mapping']['silverpop_transactional_default_template_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Default Transactional Mailing ID'),
+    '#description' => t('The ID of the Silverpop autoresponder you have '
+      . 'created from a specially-constructed template '
+      . 'in your Engage account to use for transactional mailings.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_transactional_default_template_id', NULL),
+  );
+
+  $form['transactional']['silverpop_export_unexported_only'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Only Export Unexported Events'),
+    '#description' => t('When retrieving report data for use in dashboards, '
+      . 'etc., only retrieve events that have not already been exported. You '
+      . 'should only need to disable this setting if you are (re)building your '
+      . 'local data collection.'),
+    '#default_value' => variable_get('silverpop_export_unexported_only', TRUE),
+  );
+
+  $form['transactional']['silverpop_transactional_field_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Field Name for Transactional Email Contents'),
+    '#description' => t('The name of the user field in Silverpop used to store '
+      . 'the contents of each transactional email, not including any numeric '
+      . 'suffixes (see below). E.g. "TRANSACTIONAL_EMAIL_CONTENTS."'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_transactional_field_name', 'TRANSACTIONAL_EMAIL_CONTENTS'),
+  );
+
+  $form['transactional']['silverpop_transactional_field_count'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Number of Fields Used for Transactional Email Contents'),
+    '#description' => t('Indicate how many user fields you have created in '
+      . 'Silverpop to store the contents of each transactional email. Each '
+      . 'field must be named with the name given in the field above, but with '
+      . 'a numeric index appended to it (e.g. '
+      . '"TRANSACTIONAL_EMAIL_CONTENTS_1," "TRANSACTIONAL_EMAIL_CONTENTS_2," '
+      . 'etc.)'),
+    '#size' => 40,
+    '#maxlength' => 32,
+    '#default_value' => variable_get('silverpop_transactional_field_count', 1),
+  );
+
+  $form['transactional']['silverpop_use_standard_mail_as_fallback'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Use standard mail as a backup method'),
+    '#description' => t('If an attempt to send a transactional email via '
+      . 'Silverpop fails, attempt to send that email using the standard mail '
+      . 'mechanism.'),
+    '#default_value' => variable_get('silverpop_use_standard_mail_as_fallback', TRUE),
+  );
+
+  $form['transactional']['silverpop_transactional_failure_threshold'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Failure Threshold'),
+    '#description' => t('The number of failed transactional email attempts to '
+      . 'allow before suspending Silverpop delivery of transactional emails '
+      . 'indefinitely.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_transactional_failure_threshold', NULL),
+  );
+
+  $form['transactional']['silverpop_transactional_failure_threshold_timespan'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Failure Analysis Time-Span'),
+    '#description' => t('The time period during which to count the number of '
+      . 'failed transactional email attempts. You can enter this as a string '
+      . 'like "1 month," "3 days," etc. If the given failure threshold is '
+      . 'exceeded within the given time-span, Silverpop transactional email '
+      . 'delivery will be suspended.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('silverpop_transactional_failure_threshold_timespan', NULL),
+  );
+
+  $form['transactional']['silverpop_transactional_recipients_not_in_silverpop'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Transactional Recipients Not In Silverpop'),
+    '#description' => t('If your site sends transactional emails to recipients '
+      . 'that do not exist as contacts in your Silverpop database (e.g. '
+      . 'because they are not Drupal users), enter the email addresses of '
+      . 'those recipients here. You can enter multiple addresses, separated by '
+      . 'commas. Any transactional emails destined for these recipients will '
+      . 'not be sent via Silverpop, but will be sent using Drupal\'s standard '
+      . 'mail mechanism instead.'),
+    '#cols' => 64,
+    '#rows' => 5,
+    '#default_value' => variable_get('silverpop_transactional_recipients_not_in_silverpop', NULL),
+  );
+
+  $form['reports'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Reports'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['reports']['transactional_dashboard_link'] = array(
+    '#value' => '<p>'
+      . t('You can view statistics about transactional mailings in '
+      . 'interactive table format using the ')
+      . l('transactional reporting dashboard', 'admin/reports/silverpop-transactional')
+      . '</p>',
+  );
+
+  // Render this form in the standard system settings format...
+  $form_output = system_settings_form($form);
+
+  // ...and then add a custom submit handler.
+  $form_output['#submit'][] = 'silverpop_admin_settings_form_custom_submit';
+
+  return $form_output;
+}
+
+/**
+ * Custom submit handler for Silverpop configuration form.
+ * @param $form
+ * @param $form_state
+ */
+function silverpop_admin_settings_form_custom_submit(&$form, &$form_state) {
+  $values = $form_state['values'];
+  // If the user has elected to use Silverpop to handle all system/transactional
+  //  emails, indicate that this file declares an implementation of
+  //  drupal_mail_wrapper(). That function will then be called by
+  //  drupal_mail_send(), which would otherwise call mail().
+  if ($values['silverpop_replace_standard_mail'] == TRUE) {
+    variable_set('smtp_library', drupal_get_filename('module', 'silverpop'));
+  }
+  else {
+    variable_set('smtp_library', '');
+  }
+
+  // Store relationships between Drupal transactional emails and SP
+  //  autoresponders. I would be appalled if there weren't a nicer way to
+  //  handle this (NRD 2013-07-08).
+  $i = 1;
+  $field_name = 'mailing_id_mapping_' . $i . '_drupal';
+  while (array_key_exists($field_name, $values)) {
+    $drupal_mail_key = $values[$field_name];
+    $sp_mailing_id = $values['mailing_id_mapping_' . $i . '_sp'];
+    $mail_ids = array(
+      'drupal_mail_key' => $drupal_mail_key,
+      'sp_mailing_id' => $sp_mailing_id,
+    );
+    $primary_keys = NULL;
+    // Update the table using as the reference field whichever member of the
+    //  pair is non-empty, preferring the drupal mail key.
+    if (!empty($drupal_mail_key)) {
+      $sql = 'SELECT count(drupal_mail_key) as num_rows
+              FROM {silverpop_transactional_mapping}
+              WHERE drupal_mail_key = "%s"';
+      $result = db_fetch_array(db_query($sql, array($drupal_mail_key)));
+      if ($result && $result['num_rows'] > 0) {
+        $primary_keys = array(
+          'drupal_mail_key',
+        );
+      }
+    }
+    if (!isset($primary_keys) && !empty($sp_mailing_id)) {
+      $sql = 'SELECT count(sp_mailing_id) as num_rows
+              FROM {silverpop_transactional_mapping}
+              WHERE sp_mailing_id = %d';
+      $result = db_fetch_array(db_query($sql, array($sp_mailing_id)));
+      if ($result && $result['num_rows'] > 0) {
+        $primary_keys = array(
+          'sp_mailing_id',
+        );
+      }
+    }
+    // If a record with one of these values exists, update that record.
+    if (isset($primary_keys)) {
+      $result = drupal_write_record('silverpop_transactional_mapping', $mail_ids, $primary_keys);
+    }
+    // Otherwise, add a new record.
+    else {
+      $result = drupal_write_record('silverpop_transactional_mapping', $mail_ids);
+    }
+
+    $i++;
+    $field_name = 'mailing_id_mapping_' . $i . '_drupal';
+  }
+
+}
+
+// If this module is listed as providing an alternative to the standard mail
+//  mechanism...
+if (variable_get('smtp_library', '') == drupal_get_filename('module', 'silverpop')) {
+  /**
+   * Send system mailings via Silverpop rather than using the standard
+   *  Drupal mail procedure.
+   * @param $message
+   */
+  function drupal_mail_wrapper($message) {
+
+    $recipient_email = $message['to'];
+    if (empty($recipient_email)) {
+      return FALSE;
+    }
+    else {
+      $uid = NULL;
+      $use_standard_mail = TRUE;
+
+      // Check to see if the message recipient is in the list of known recipients
+      //  who do not exist in Silverpop.
+      $normalized_recipient_list = preg_replace('/' . PHP_EOL . '/', ',', variable_get('silverpop_transactional_recipients_not_in_silverpop', ''));
+      $trimmed_recipient_list = preg_replace('/\s+/', '', $normalized_recipient_list);
+      $non_sp_recipients = explode(',', $trimmed_recipient_list);
+
+      // If the recipient is not in that list, attempt to send this mailing via
+      //  Silverpop.
+      if (!in_array($recipient_email, $non_sp_recipients)) {
+
+        $sp_db_is_uid_keyed = variable_get('silverpop_db_is_uid_keyed', FALSE);
+        if ($sp_db_is_uid_keyed) {
+          // If the Silverpop database is keyed by user ID rather than email,
+          //  determine the user ID that best corresponds to the given email
+          //  address.
+          //  By default, we will use user.mail, but first we let other modules hook
+          //  into this process to associate a user ID with an email address in
+          //  whatever way they choose. Any implementations of this hook should
+          //  modify $uid by reference.
+          module_invoke_all('silverpop_map_email_to_uid', $recipient_email, $uid);
+
+          // If no other modules have provided a UID...
+          if (empty($uid)) {
+            // ...try to find a user whose main account email matches the given
+            //  email address.
+            $sql = "SELECT u.uid
+              FROM {users} u
+              WHERE u.mail = '%s'";
+
+            $result = db_query($sql, $recipient_email);
+
+            if ($result) {
+              if ($row = db_fetch_array($result)) {
+                $uid = $row['uid'];
+              }
+            }
+          }
+
+          if (!empty($uid)) {
+            $sp = new silverpopAPI();
+            $sp_result = $sp->sendEngageTransactionalEmailByUID($message['to'], $message['subject'], $message['body'], $uid, $message['id']);
+          }
+        }
+        else {
+          $sp = new silverpopAPI();
+          $sp_result = $sp->sendEngageTransactionalEmail($message['to'], $message['subject'], $message['body'], $message['id']);
+        }
+
+        if (isset($sp_result) && is_array($sp_result) && $sp_result[0] == TRUE) {
+          return TRUE;
+        }
+
+        // The attempt to send the email via Silveprop was unsuccessful (if the
+        //  delivery had succeeded, we would have already returned by this point).
+        // Log the failure.
+        // @todo: get a nice error message from the SP response, and add it to the
+        //  log message.
+        $log_data = array(
+          'drupal_mail_id' => $message['id'],
+        );
+        if (isset($sp_result)) {
+          $log_data['sp_result'] = $sp_result;
+        }
+        silverpop_log('error', 'transactional_email_failure', $message['to'], $uid, $log_data);
+
+        // Site administrators can elect to use the standard mail mechanism as a
+        // backup in the event that a Silveprop transactional email fails.
+        $use_standard_mail = variable_get('silverpop_use_standard_mail_as_fallback', TRUE);
+
+        //  Suspend the Silverpop mail implementation indefinitely if a certain
+        //  threshold has been reached (that threshold is configurable via the
+        //  CMS).
+        $sql = 'SELECT COUNT(id) FROM silverpop_log';
+        $query_data = array();
+        $failure_timespan = variable_get('silverpop_transactional_failure_threshold_timespan', FALSE);
+        // If a failure analysis time-span has been specified, limit our query
+        //  to failures that have occurred during that time-span.
+        if (!empty($failure_timespan)) {
+          $cutoff_time = strtotime('- ' . $failure_timespan);
+          if ($cutoff_time) {
+            $sql .= ' WHERE timestamp >= %d';
+            $query_data[] = $cutoff_time;
+          }
+        }
+        $failures = db_query($sql, $query_data);
+        if ($failures) {
+          if ($row = db_fetch_array($failures)) {
+            // If the number of failures returned by our query exceeds the
+            //  specified limit...
+            $num_failures = (int) $row['COUNT(id)'];
+            $failure_limit = variable_get('silverpop_transactional_failure_threshold', FALSE);
+            if ($failure_limit && $num_failures > (int) $failure_limit) {
+              // ...tell Drupal that this module no longer handles system
+              //  mailings...
+              variable_set('smtp_library', '');
+              // ...and update our own variable accordingly. This means that SP
+              //  will not be used to deliver transactional emails until an admin
+              //  re-selects that option from the module admin form.
+              variable_set('silverpop_replace_standard_mail', FALSE);
+              // @todo: Tell the admin that this has happened, so he/she can
+              //  correct any issues before re-enabling SP transactional email
+              //  handling. Also allow admin to reset failure count on admin form
+              //  (not purging data from SP log, but setting a timestamp var
+              //  indicating when the count was cleared, which would then become
+              //  part of our query) (NRD 2013-06-20).
+            }
+          }
+        }
+      }
+
+      // Try to send this mailing using the standard Drupal mail mechanism
+      //  (unless we tried to send it via SP and the admin has chosen not to use
+      //  standard mail as a backup for SP failures).
+      if ($use_standard_mail) {
+        // Temporarily purge the variable that declares overrides to the standard
+        //  mail method.
+        $current_mail_implementation = variable_get('smtp_library', '');
+        variable_set('smtp_library', '');
+        // Call the standard mail function.
+        $success = drupal_mail_send($message);
+        // Then restore that variable to declare our override of the standard mail
+        //  method. This method is slightly more elegant than duplicating the
+        //  short contents of drupal_mail_send here.
+        variable_set('smtp_library', $current_mail_implementation);
+      }
+      else {
+        $success = FALSE;
+      }
+
+      return $success;
+    }
+  }
+}
+
+/**
+ * Helper function to log events (e.g. errors encountered when attempting to
+ *  send mailings with Silverpop)
+ *
+ * @param $event_type
+ * @param $event_name
+ * @param $data
+ * @param null $timestamp
+ */
+function silverpop_log($event_type, $event_name, $recipient_email = NULL, $recipient_uid = NULL, $data = array(), $timestamp = NULL) {
+  if (empty($timestamp)) {
+    $timestamp = time();
+  }
+
+  // @todo: #D7 db_insert.
+  $field_data = array(
+    'event_type' => $event_type,
+    'event_name' => $event_name,
+    'recipient_email' => $recipient_email,
+    'recipient_uid' => $recipient_uid,
+    'timestamp' => $timestamp,
+    'data' => serialize($data),
+  );
+  drupal_write_record('silverpop_log', $field_data);
+}
+
+/**
+ * For all transactional emails in our local consciousness, order a Silverpop
+ *  data export for the corresponding autoresponder mailing, retrieve the
+ *  exported data, parse it
+ *  and store it in our own table for use in local reporting dashboards, etc.isset
+ * @return array
+ */
+function silverpop_fetch_transactional_data(&$form = NULL, &$form_state = NULL) {
+
+  $errors = FALSE;
+
+  $sp = new silverpopAPI();
+  $map = $sp->drupalSPMailMapping();
+  $default_trans_mailing_id = variable_get('silverpop_transactional_default_template_id', NULL);
+  $sp_uid_field_name = variable_get('silverpop_primary_key_name', 'DRUPAL_USER_ID');
+  if (!empty($form_state['values']['export_start_date'])) {
+    $export_start_date = strtotime($form_state['values']['export_start_date']);
+  }
+  if (empty($export_start_date)) {
+    $one_day_ago = strtotime('-1 day');
+    $export_start_date = variable_get('silverpop_last_transactional_fetch_time', $one_day_ago);
+  }
+  if (!empty($form_state['values']['export_end_date'])) {
+    $export_end_date = strtotime($form_state['values']['export_end_date']);
+  }
+  if (empty($export_end_date)) {
+    $export_end_date = time();
+  }
+
+  $data = array(
+    'ALL_EVENT_TYPES' => 'true',
+    'EVENT_DATE_START' => date('m/d/Y H:i:s', $export_start_date),
+    'EVENT_DATE_END' => date('m/d/Y H:i:s', $export_end_date),
+    'MOVE_TO_FTP' => 'true',
+    'RETURN_MAILING_NAME' => 'true',
+    'COLUMNS' => array(
+      $sp_uid_field_name,
+    ),
+  );
+
+  $created_files = array();
+
+  // Start with a list of all drupal mailings that have been mapped to SP
+  //  autoresponders.
+  $all_mailings = $map['drupal'];
+  // Add an entry for all unmapped mailings (those that used the default
+  //  autoresponder).
+  $all_mailings['unclassified'] = $default_trans_mailing_id;
+
+  foreach ($all_mailings as $drupal_mail_key => $sp_mailing_id) {
+    if (!empty($sp_mailing_id)) {
+      $data['MAILING_ID'] = $sp_mailing_id;
+      $data['EXPORT_FILE_NAME'] = $drupal_mail_key;
+      $result = $sp->rawRecipientDataExport($data);
+      if (is_array($result) && $result[0] == TRUE) {
+        // @todo: more succinct/elegant parsing.
+        $jobIDs = $result[1]->getElementsByTagName('JOB_ID');
+        $job_id = $jobIDs->item($jobIDs->length - 1)->nodeValue;
+        $filePaths = $result[1]->getElementsByTagName('FILE_PATH');
+        $file_path = $filePaths->item($filePaths->length - 1)->nodeValue;
+        $created_files[] = $file_path;
+        drupal_set_message('Exported data for drupal transactional mail "'
+          .   $drupal_mail_key . '" (Silverpop mailing ID '
+          .   $sp_mailing_id . '). Data job ID: ' . $job_id . '. '
+          .   'Exported file: ' . $file_path);
+      }
+      else {
+        drupal_set_message('Failed to export data for drupal transactional mail "'
+                  .   $drupal_mail_key . '" (Silverpop mailing ID '
+                  .   $sp_mailing_id . ')', 'error');
+        $errors = TRUE;
+      }
+    }
+  }
+
+  // @todo: capture JOB_ID and FILE_PATH from $result, and use them in our file
+  //  retrieval (after background data job completes)? It may be just as good
+  //  to scour the ftp directory for all usable files each time this function
+  //  is invoked (and deduce the Drupal mail key from the filename)
+  //  (NRD 2013-07-08).
+
+  $ftp_host = variable_get('silverpop_ftp_host', NULL);
+  $ftp_username = variable_get('silverpop_ftp_username', NULL);
+  $ftp_password = variable_get('silverpop_ftp_password', NULL);
+
+  $conn_id = ftp_connect($ftp_host);
+
+  // Login with username and password
+  $login_result = ftp_login($conn_id, $ftp_username, $ftp_password);
+
+  if (!$login_result) {
+    drupal_set_message(t('Could not log-in to FTP server with provided '
+      . 'credentials.'), 'error');
+    return FALSE;
+  }
+
+  // Force our connection to use passive mode (i.e. where transactions must be
+  //  client-initiated). This can help if the client is behind a firewall
+  //  (may only be necessary in local dev environment,
+  //  but should cause no side effects in other environments).
+//  ftp_pasv($conn_id, TRUE);
+
+  // Get a list of files in the "download" directory.
+  $directory_contents = ftp_nlist($conn_id, 'download');
+
+  $local_zip_files = array();
+  $local_csv_files = array();
+
+  foreach ($directory_contents as $remote_file) {
+    $filename = preg_replace('/^download\//', '', $remote_file);
+    $local_file_uri = file_directory_temp() . '/' . $filename;
+    $download_attempt = ftp_get($conn_id, $local_file_uri, $remote_file, FTP_BINARY);
+    if (!$download_attempt) {
+      drupal_set_message(t('Could not download ' . $remote_file), 'error');
+      $errors = TRUE;
+    }
+    else {
+      $local_zip_files[$remote_file] = $local_file_uri;
+    }
+  }
+  foreach ($local_zip_files as $remote_zip_file => $local_zip_file) {
+    $zip = zip_open($local_zip_file);
+    if(!is_resource($zip)) {
+      $error_code = zipFileErrMsg($zip);
+      drupal_set_message(t('Unable to open file: ') . $local_zip_file
+        . ' (error: ' . $error_code . ')', 'error');
+      $errors = TRUE;
+      continue;
+    }
+
+    while ($zip_entry = zip_read($zip)) {
+      $zname = zip_entry_name($zip_entry);
+
+      if (!zip_entry_open($zip, $zip_entry, 'r')) {
+        drupal_set_message(t('Unable to proccess file: ') . $zname, 'error');
+        $errors = TRUE;
+        continue;
+      }
+
+      $zip_fs = zip_entry_filesize($zip_entry);
+      if (empty($zip_fs)) {
+        continue;
+      }
+
+      $zz = zip_entry_read($zip_entry, $zip_fs);
+
+      $csv_uri = file_directory_temp() . '/' . $zname;
+
+      $z = fopen($csv_uri, 'w');
+      fwrite($z, $zz);
+      fclose($z);
+      zip_entry_close($zip_entry);
+
+      $local_csv_files[$remote_zip_file] = $csv_uri;
+    }
+    if (is_int($zip_entry)) {
+      $error_code = zipFileErrMsg($zip);
+      drupal_set_message(t('Unable to read file: ') . $local_zip_file
+      . ' (error: ' . $error_code . ')', 'error');
+      $errors = TRUE;
+    }
+
+    zip_close($zip);
+
+    // Delete the local zip file (optional).
+    file_delete($local_zip_file);
+  }
+
+  foreach ($local_csv_files as $remote_zip_file_name => $csv_file) {
+    // The string at the beginning of the filename is the name of the Drupal
+    //  mail key for the given mailing.
+    // @todo: use a more straightforward/reliable approach (e.g. store a list of
+    //  specific file names from our exports, and reference those directly)?
+    $drupal_mail_key_match = preg_match('/^(.*\/)?([^\/\s]+)[^\/]+$/', $csv_file, $matches);
+    // Fall back to the filename if necessary (shouldn't happen).
+    $drupal_mail_key = $drupal_mail_key_match ? $matches[2] : $csv_file;
+    $sp_uid_field_name = variable_get('silverpop_primary_key_name', 'DRUPAL_USER_ID');
+    ini_set('auto_detect_line_endings', TRUE);
+    $handle = fopen($csv_file, 'r');
+    $headers = fgetcsv($handle);
+//    $db_rows = array();
+    if ($headers) {
+      while (($row = fgetcsv($handle)) !== FALSE) {
+        $assoc_row = array_combine($headers, $row);
+        $transformed_row = array(
+          'sp_mailing_name' => $assoc_row['Mailing Name'],
+          'drupal_mail_key' => $drupal_mail_key,
+          'sp_mailing_id' => $assoc_row['Mailing Id'],
+          'recipient_email' => $assoc_row['Email'],
+          'recipient_uid' => $assoc_row[$sp_uid_field_name],
+          'event_type' => $assoc_row['Event Type'],
+          'event_timestamp' => strtotime($assoc_row['Event Timestamp']),
+          'event_type' => $assoc_row['Event Type'],
+          'sp_recipient_id' => $assoc_row['Recipient Id'],
+          'recipient_type' => $assoc_row['Recipient Type'],
+          'sp_report_id' => $assoc_row['Report Id'],
+          'content_id' => $assoc_row['Content Id'],
+          'click_name' => $assoc_row['Click Name'],
+          'click_url' => $assoc_row['URL'],
+        );
+        // @todo: #D7 insert en masse?
+//        $db_rows[] = $transformed_row;
+        $result = drupal_write_record('silverpop_report_data', $transformed_row);
+      }
+//      $result = drupal_write_record('silverpop_report_data', $db_rows);
+    }
+//    file_delete($csv_file);
+    ftp_delete($conn_id, $remote_zip_file_name);
+  }
+
+  ftp_close($conn_id);
+
+  if ($errors) {
+    return FALSE;
+  }
+  else {
+    return TRUE;
+  }
+}
+
+/**
+ * Implements hook_views_api.
+ * @return array
+ */
+function silverpop_views_api() {
+  return array(
+    'api' => 2,
+  );
+}
+
+function silverpop_tw_views_data_alter($tables) {
+//  $tables['silverpop_report_data']['event_timestamp']['field']['handler'] = 'views_handler_field_date';
+  $tables['silverpop_report_data']['event_timestamp']['field']['handler'] = 'views_handler_field_date';
+  //  $tables['silverpop_report_data']['event_timestamp']['filter']['handler'] = 'views_handler_filter_date';
+  $tables['silverpop_report_data']['event_timestamp']['filter']['handler'] = 'views_handler_filter_date';
+  //  $tables['silverpop_report_data']['event_timestamp']['argument']['handler'] = 'views_handler_argument_date';
+  $tables['silverpop_report_data']['event_timestamp']['argument']['handler'] = 'views_handler_argument_date';
+}
+
+/**
+ * Implements hook_block.
+ * @todo: more elegant dashboard assembly, and/or move this to silverpop_views
+ *  or silverpop_reports module.
+ */
+function silverpop_block($op='list', $delta = 0, $edit = array()) {
+  switch ($op) {
+    case 'list':
+      $blocks = array();
+      $blocks['sp_trans_report_data_control'] = array(
+        'info' => t('Silverpop Transactional Report Data Control'),
+        'visibility' => 1,
+        'pages' => 'admin/reports/silverpop-transactional',
+      );
+      return $blocks;
+    case 'view':
+      switch ($delta) {
+        case 'sp_trans_report_data_control':
+          $block_content_string = 'You can use the button below to request a '
+            . 'new '
+            . 'data export from your Silverpop database. When the Silverpop '
+            . 'data job is finished, the exported data will be available for '
+            . 'retrieval. Clicking this button will initiate a new set of '
+            . 'exports and then retrieve any available data and import it '
+            . 'into Drupal. Because data '
+            . 'jobs can take some time to complete, you may need to perform '
+            . 'this export/fetch twice to get the latest possible data.';
+          $block_contents = '<p>' . t($block_content_string) . '</p>'
+            . drupal_get_form('silverpop_reports_dashboard_form');
+          $block = array(
+            'subject' => t('Retrieve more data from Silverpop'),
+            'content' => $block_contents,
+          );
+          break;
+      }
+      return $block;
+  }
+}
+
+/**
+ * Defines a form for use on reports dashboard page.
+ * @return array
+ */
+function silverpop_reports_dashboard_form() {
+  $form = array();
+  $form['export_start_date'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Export Start Date'),
+    '#description' => t('The beginning of the date range whose data you want '
+      . 'to fetch. Defaults to one day ago.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+  );
+  $form['export_end_date'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Export End Date'),
+    '#description' => t('The end of the date range whose data you want to '
+      . 'fetch. Defaults to the present time.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+  );
+  $form['export_transactional_data'] = array(
+    '#type' => 'button',
+    '#value' => t('Export/Fetch Data'),
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('silverpop_fetch_transactional_data'),
+  );
+  return $form;
+}
