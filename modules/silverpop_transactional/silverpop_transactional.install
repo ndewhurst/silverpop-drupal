@@ -10,7 +10,6 @@ function silverpop_transactional_install() {
  * Implements hook_uninstall().
  */
 function silverpop_transactional_uninstall() {
-  variable_del('silverpop_last_transactional_fetch_time');
   variable_del('silverpop_replace_standard_mail');
   variable_del('silverpop_transactional_default_template_id');
   variable_del('silverpop_export_unexported_only');
