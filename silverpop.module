@@ -19,7 +19,7 @@ module_load_include('inc', 'silverpop', 'simple_html_dom');
 function silverpop_menu() {
 
   $items = array();
-  $items['admin/settings/silverpop'] = array(
+  $items['admin/config/silverpop'] = array(
     'title' => 'Silverpop',
     'description' => t('Silverpop API Settings'),
     'page callback' => 'drupal_get_form',
@@ -27,6 +27,15 @@ function silverpop_menu() {
     'access arguments' => array('administer silverpop'),
     'type' => MENU_NORMAL_ITEM,
   );
+  $items['admin/config/silverpop/settings'] = array(
+    'title' => 'Silverpop Settings',
+    'description' => t('Silverpop API Settings'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('silverpop_admin_settings_form'),
+    'access arguments' => array('administer silverpop'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
 
   return $items;
 }
