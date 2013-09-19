@@ -275,67 +275,67 @@ function silverpop_reporting_views_api() {
  *  or silverpop_reports module.
  * @todo: D7, etc.
  */
-//function silverpop_block($op='list', $delta = 0, $edit = array()) {
-//  switch ($op) {
-//    case 'list':
-//      $blocks = array();
-//      $blocks['sp_trans_report_data_control'] = array(
-//        'info' => t('Silverpop Transactional Report Data Control'),
-//        'visibility' => 1,
-//        'pages' => 'admin/reports/silverpop-transactional',
-//      );
-//      return $blocks;
-//    case 'view':
-//      switch ($delta) {
-//        case 'sp_trans_report_data_control':
-//          $block_content_string = 'You can use the button below to request a '
-//            . 'new '
-//            . 'data export from your Silverpop database. When the Silverpop '
-//            . 'data job is finished, the exported data will be available for '
-//            . 'retrieval. Clicking this button will initiate a new set of '
-//            . 'exports and then retrieve any available data and import it '
-//            . 'into Drupal. Because data '
-//            . 'jobs can take some time to complete, you may need to perform '
-//            . 'this export/fetch twice to get the latest possible data.';
-//          $block_contents = '<p>' . t($block_content_string) . '</p>'
-//            . drupal_get_form('silverpop_reporting_dashboard_form');
-//          $block = array(
-//            'subject' => t('Retrieve more data from Silverpop'),
-//            'content' => $block_contents,
-//          );
-//          break;
-//      }
-//      return $block;
-//  }
-//}
+function silverpop_reporting_block($op='list', $delta = 0, $edit = array()) {
+ switch ($op) {
+   case 'list':
+     $blocks = array();
+     $blocks['sp_trans_report_data_control'] = array(
+       'info' => t('Silverpop Transactional Report Data Control'),
+       'visibility' => 1,
+       'pages' => 'admin/reports/silverpop-transactional',
+     );
+     return $blocks;
+   case 'view':
+     switch ($delta) {
+       case 'sp_trans_report_data_control':
+         $block_content_string = 'You can use the button below to request a '
+           . 'new '
+           . 'data export from your Silverpop database. When the Silverpop '
+           . 'data job is finished, the exported data will be available for '
+           . 'retrieval. Clicking this button will initiate a new set of '
+           . 'exports and then retrieve any available data and import it '
+           . 'into Drupal. Because data '
+           . 'jobs can take some time to complete, you may need to perform '
+           . 'this export/fetch twice to get the latest possible data.';
+         $block_contents = '<p>' . t($block_content_string) . '</p>'
+           . drupal_get_form('silverpop_reporting_dashboard_form');
+         $block = array(
+           'subject' => t('Retrieve more data from Silverpop'),
+           'content' => $block_contents,
+         );
+         break;
+     }
+     return $block;
+ }
+}
 
 /**
  * Defines a form for use on reports dashboard page.
  * @return array
  */
-//function silverpop_reporting_dashboard_form() {
-//  $form = array();
-//  $form['export_start_date'] = array(
-//    '#type' => 'textfield',
-//    '#title' => t('Export Start Date'),
-//    '#description' => t('The beginning of the date range whose data you want '
-//      . 'to fetch. Defaults to one day ago.'),
-//    '#size' => 40,
-//    '#maxlength' => 255,
-//  );
-//  $form['export_end_date'] = array(
-//    '#type' => 'textfield',
-//    '#title' => t('Export End Date'),
-//    '#description' => t('The end of the date range whose data you want to '
-//      . 'fetch. Defaults to the present time.'),
-//    '#size' => 40,
-//    '#maxlength' => 255,
-//  );
-//  $form['export_transactional_data'] = array(
-//    '#type' => 'button',
-//    '#value' => t('Export/Fetch Data'),
-//    '#executes_submit_callback' => TRUE,
-//    '#submit' => array('silverpop_fetch_transactional_data'),
-//  );
-//  return $form;
-//}
+function silverpop_reporting_dashboard_form() {
+ $form = array();
+ $form['export_start_date'] = array(
+   '#type' => 'textfield',
+   '#title' => t('Export Start Date'),
+   '#description' => t('The beginning of the date range whose data you want '
+     . 'to fetch. Defaults to one day ago.'),
+   '#size' => 40,
+   '#maxlength' => 255,
+ );
+ $form['export_end_date'] = array(
+   '#type' => 'textfield',
+   '#title' => t('Export End Date'),
+   '#description' => t('The end of the date range whose data you want to '
+     . 'fetch. Defaults to the present time.'),
+   '#size' => 40,
+   '#maxlength' => 255,
+ );
+ $form['export_transactional_data'] = array(
+   '#type' => 'button',
+   '#value' => t('Export/Fetch Data'),
+   '#executes_submit_callback' => TRUE,
+   '#submit' => array('silverpop_fetch_transactional_data'),
+ );
+ return $form;
+}
