@@ -1,6 +1,8 @@
 version = 7.x-1.0-dev
-name = Silverpop
-description = Provides a Drupal interface for the Silverpop Engage XML API
+name = Silverpop Transactional Emails
+description = Provides a Drupal interface for creating transactional emails with the Silverpop Engage XML API
 core = 7.x
 php = 5.3
 package = Services
+
+dependencies[] = silverpop
