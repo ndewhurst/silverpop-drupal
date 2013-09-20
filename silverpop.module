@@ -48,23 +48,6 @@ function silverpop_perm() {
 }
 
 /**
- * Implements hook_cron
- */
-function silverpop_cron() {
-  // Fetch the latest report data from SP for transactional mailings, for use
-  //  in local reporting dashboards, etc.
-  // First, record the time of this data retrieval.
-  $request_time = time();
-  // Then try to fetch new data.
-  $success = silverpop_fetch_transactional_data();
-  // If the fetch process succeeded, record the time at which the fetch was
-  //  initiated.
-  if ($success) {
-    variable_set('silverpop_last_transactional_fetch_time', $request_time);
-  }
-}
-
-/**
  * Silverpop account configuration.
  * @return mixed
  */
