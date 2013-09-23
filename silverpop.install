@@ -1,12 +1,27 @@
 <?php
 
 function silverpop_install() {
-  drupal_install_schema('silverpop');
 }
 
 function silverpop_uninstall() {
-  drupal_uninstall_schema('silverpop');
-  // @todo: delete custom variables.
+  variable_del('silverpop_endpoint');
+  variable_del('silverpop_userid');
+  variable_del('silverpop_password');
+  variable_del('silverpop_oauth_client_id');
+  variable_del('silverpop_oauth_client_secret');
+  variable_del('silverpop_oauth_refresh_token');
+  variable_del('silverpop_ftp_host');
+  variable_del('silverpop_ftp_username');
+  variable_del('silverpop_ftp_password');
+  variable_del('silverpop_default_listid');
+  variable_del('silverpop_default_templateid');
+  variable_del('silverpop_db_is_uid_keyed');
+  variable_del('silverpop_primary_key_name');
+  variable_del('silverpop_domains_to_exclude_from_tracking');
+  variable_del('silverpop_dll_server');
+  variable_del('silverpop_url_append_string');
+  variable_del('silverpop_url_append_string_domains');
+  variable_del('silverpop_transactional_track_links');
 }
 
 /**
@@ -30,104 +45,5 @@ function silverpop_schema() {
     'primary key' => array('id'),
   );
 
-  $schema['silverpop_transactional_mapping'] = array(
-    'fields' => array(
-      'drupal_mail_key' => array('type' => 'varchar', 'length' => 255, 'not null' => TRUE),
-      'sp_mailing_id' => array('type' => 'int', 'not null' => FALSE),
-    ),
-    'primary key' => array('drupal_mail_key', 'sp_mailing_id'),
-  );
-
-  $schema['silverpop_report_data'] = array(
-    'fields' => array(
-      'record_id' => array('type' => 'serial', 'not null' => TRUE),
-      'sp_mailing_name' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'drupal_mail_key' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'sp_mailing_id' => array('type' => 'int', 'not null' => FALSE),
-      'recipient_email' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'recipient_uid' => array('type' => 'int', 'not null' => FALSE),
-      'event_type' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'event_timestamp' => array('type' => 'int', 'not null' => FALSE),
-      'sp_recipient_id' => array('type' => 'int', 'size' => 'big', 'not null' => FALSE),
-      'recipient_type' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'sp_report_id' => array('type' => 'int', 'not null' => FALSE),
-      'content_id' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'click_name' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'click_url' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-    ),
-    'primary key' => array('record_id'),
-    'unique_keys' => array('deduplication_key' => array('sp_mailing_id', 'recipient_uid', 'event_type', 'event_timestamp'))
-  );
-
   return $schema;
-}
-
-/**
- * Create tables for handling and reporting on transactional emails.
- */
-function silverpop_update_6001() {
-  $schema = array();
-
-  $schema['silverpop_transactional_mapping'] = array(
-    'fields' => array(
-      'drupal_mail_key' => array('type' => 'varchar', 'length' => 255, 'not null' => TRUE),
-      'sp_mailing_id' => array('type' => 'int', 'not null' => FALSE),
-    ),
-    'primary key' => array('drupal_mail_key', 'sp_mailing_id'),
-  );
-
-  $schema['silverpop_report_data'] = array(
-    'fields' => array(
-      'record_id' => array('type' => 'serial', 'not null' => TRUE),
-      'sp_mailing_name' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'drupal_mail_key' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'sp_mailing_id' => array('type' => 'int', 'not null' => FALSE),
-      'recipient_email' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'recipient_uid' => array('type' => 'int', 'not null' => FALSE),
-      'event_type' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'event_timestamp' => array('type' => 'int', 'not null' => FALSE),
-      'sp_recipient_id' => array('type' => 'int', 'size' => 'big', 'not null' => FALSE),
-      'recipient_type' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'sp_report_id' => array('type' => 'int', 'not null' => FALSE),
-      'content_id' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'click_name' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-      'click_url' => array('type' => 'varchar', 'length' => 255, 'not null' => FALSE),
-    ),
-    'primary key' => array('record_id'),
-  );
-
-  $return = NULL;
-
-  foreach ($schema as $table_name => $table_schema) {
-    if (!db_table_exists($table_name)) {
-      db_create_table($return, $table_name, $table_schema);
-    }
-  }
-}
-
-/**
- * (A) Truncate all data in 'silverpop_report_data' table.
- * (B) Add a unique key to the 'silverpop_report_data' table, consisting of the
- *  following fields: 'sp_mailing_id', 'recipient_uid', 'event_type', and
- *  'event_timestamp.'
- */
-function silverpop_update_6002() {
-  $return = array();
-  db_query('TRUNCATE silverpop_report_data');
-  db_add_unique_key($return, 'silverpop_report_data', 'deduplication_key', array('sp_mailing_id', 'recipient_uid', 'event_type', 'event_timestamp'));
-}
-
-/**
- * Change sp_recipient_id field from INT to BIGINT
- */
-function silverpop_update_6003() {
-  if (db_table_exists('silverpop_report_data')) {
-    $field_spec = array(
-      'type' => 'int',
-      'size' => 'big',
-      'not null' => FALSE
-    );
-    $return = array();
-    db_change_field($return, 'silverpop_report_data', 'sp_recipient_id', 'sp_recipient_id', $field_spec);
-  }
 }
